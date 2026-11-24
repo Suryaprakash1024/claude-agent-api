@@ -1,4 +1,6 @@
-# claude-code-api
+# claude-agent-api
+
+*Powered by Claude. An independent project, not affiliated with or endorsed by Anthropic.*
 
 Use your local **Claude Code** as an **OpenAI- and Anthropic-compatible HTTP API**, the same way
 [copilot-api](https://github.com/ericc-ch/copilot-api) does for GitHub Copilot. Any tool that speaks
@@ -38,8 +40,8 @@ Requirements: Node.js 22.18+ (it runs TypeScript directly), and Claude Code sign
 (`claude auth login`) **or** `ANTHROPIC_API_KEY` set.
 
 ```powershell
-git clone <this-repo-url> claude-code-api
-cd claude-code-api
+git clone <this-repo-url> claude-agent-api
+cd claude-agent-api
 npm install
 npm run build
 node dist/main.js start
@@ -63,7 +65,7 @@ Usage:      http://127.0.0.1:4141/usage
 
 ## Commands (compared with copilot-api)
 
-| copilot-api | claude-code-api | Notes |
+| copilot-api | claude-agent-api | Notes |
 |---|---|---|
 | `start` | `start` | Starts the server |
 | `auth` | `auth` / `auth --status` | Runs `claude auth login` / `claude auth status` |
@@ -78,7 +80,7 @@ Usage:      http://127.0.0.1:4141/usage
 | `--host` | | 127.0.0.1 | Interface to bind. Use `0.0.0.0` only together with `--api-key` |
 | `--verbose` | `-v` | false | Verbose logs, including Claude Code's stderr |
 | `--model` | `-m` | Claude Code default | Default model, for requests that name none or a non-Claude model such as `gpt-4o` |
-| `--api-key` | `-k` | none | Clients must send this key as `Authorization: Bearer …` or `x-api-key`. Also read from `CLAUDE_CODE_API_KEY` |
+| `--api-key` | `-k` | none | Clients must send this key as `Authorization: Bearer …` or `x-api-key`. Also read from `CLAUDE_AGENT_API_KEY` |
 | `--manual` | | false | Approve each request in the server terminal |
 | `--rate-limit` | `-r` | none | Minimum seconds between requests |
 | `--wait` | `-w` | false | Wait out the rate limit instead of returning 429 |

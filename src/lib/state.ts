@@ -35,5 +35,5 @@ export const state: ServerState = {
   workspaceRoot: path.resolve(process.cwd()),
 }
 
-export const APP_NAME = "claude-code-api"
+export const APP_NAME = "claude-agent-api"
 export const APP_VERSION = "0.1.0"

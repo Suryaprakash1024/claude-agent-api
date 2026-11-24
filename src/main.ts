@@ -40,7 +40,7 @@ const checkUsage = defineCommand({
     "api-key": { type: "string", alias: "k", description: "The server's --api-key, if it has one" },
   },
   async run({ args }) {
-    const key = args["api-key"] ?? process.env.CLAUDE_CODE_API_KEY
+    const key = args["api-key"] ?? process.env.CLAUDE_AGENT_API_KEY
     const res = await fetch(`http://${args.host}:${args.port}/usage`, {
       headers: key ? { authorization: `Bearer ${key}` } : {},
     }).catch((err: Error) => {
@@ -72,7 +72,7 @@ const debug = defineCommand({
       runtime: { node: process.version, platform: process.platform, arch: process.arch },
       env: {
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? "set" : "not set",
-        CLAUDE_CODE_API_KEY: process.env.CLAUDE_CODE_API_KEY ? "set" : "not set",
+        CLAUDE_AGENT_API_KEY: process.env.CLAUDE_AGENT_API_KEY ? "set" : "not set",
       },
     }
     try {

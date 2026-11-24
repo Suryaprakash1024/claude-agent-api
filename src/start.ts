@@ -18,7 +18,7 @@ export const start = defineCommand({
     host: { type: "string", default: "127.0.0.1", description: "Interface to bind (use 0.0.0.0 only with --api-key)" },
     verbose: { type: "boolean", alias: "v", default: false, description: "Verbose logging, including Claude Code's stderr" },
     model: { type: "string", alias: "m", description: "Default model (alias like 'sonnet' or an ID like 'claude-sonnet-5-5')" },
-    "api-key": { type: "string", alias: "k", description: "Require clients to send this key (Bearer or x-api-key). Also read from CLAUDE_CODE_API_KEY" },
+    "api-key": { type: "string", alias: "k", description: "Require clients to send this key (Bearer or x-api-key). Also read from CLAUDE_AGENT_API_KEY" },
     manual: { type: "boolean", default: false, description: "Approve each request manually in this terminal" },
     "rate-limit": { type: "string", alias: "r", description: "Minimum seconds between requests" },
     wait: { type: "boolean", alias: "w", default: false, description: "Wait for the rate-limit cooldown instead of returning 429" },
@@ -33,7 +33,7 @@ export const start = defineCommand({
     state.host = args.host
     state.verbose = args.verbose
     state.defaultModel = args.model
-    state.apiKey = args["api-key"] ?? process.env.CLAUDE_CODE_API_KEY
+    state.apiKey = args["api-key"] ?? process.env.CLAUDE_AGENT_API_KEY
     state.manualApprove = args.manual
     state.rateLimitSeconds = args["rate-limit"] ? Number.parseFloat(args["rate-limit"]) : undefined
     state.rateLimitWait = args.wait
@@ -65,7 +65,7 @@ export const start = defineCommand({
         }
       } catch (err) {
         consola.warn(`Could not read account/models from Claude Code: ${err instanceof Error ? err.message : err}`)
-        consola.warn("Run `claude-code-api auth` (or `claude auth login`) if Claude Code is not signed in.")
+        consola.warn("Run `claude-agent-api auth` (or `claude auth login`) if Claude Code is not signed in.")
       }
     }
 
@@ -74,7 +74,7 @@ export const start = defineCommand({
       const base = `http://${state.host === "0.0.0.0" ? "localhost" : state.host}:${state.port}`
       consola.box(
         [
-          `claude-code-api listening on ${base}`,
+          `claude-agent-api listening on ${base}`,
           "",
           `OpenAI:     ${base}/v1/chat/completions   ${base}/v1/models`,
           `Anthropic:  ${base}/v1/messages           ${base}/v1/messages/count_tokens`,
