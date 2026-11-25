@@ -97,7 +97,7 @@ Usage:      http://127.0.0.1:4141/usage
 | `POST /v1/chat/completions` (also `/chat/completions`) | OpenAI | Streaming, `stream_options.include_usage`, images (`image_url` data or https URLs), `reasoning_effort` → effort, reasoning returned as `reasoning_content` |
 | `GET /v1/models` (also `/models`) | OpenAI | Live list from Claude Code (aliases such as `sonnet` plus full IDs) |
 | `POST /v1/embeddings` | OpenAI | Returns **501**: Claude has no embeddings |
-| `POST /v1/messages` | Anthropic | Streaming passes Claude's own SSE events through unchanged. `system`, `max_tokens`, `thinking`, `output_config.effort` |
+| `POST /v1/messages` | Anthropic | Streaming passes Claude's own SSE events through unchanged. `system`, `thinking`, `output_config.effort` |
 | `POST /v1/messages/count_tokens` | Anthropic | Exact when `ANTHROPIC_API_KEY` is set; otherwise an estimate (~4 chars/token) with header `x-token-count-estimated: true` |
 | `POST /v1/agent/query` | (own) | Claude Code **with tools** in a folder; see below. Needs `--agent` |
 | `GET /usage` | (like copilot-api) | Requests, errors, tokens and estimated cost per model since start, plus the signed-in account |
@@ -203,6 +203,6 @@ tests/translate.test.ts   unit tests for request translation (npm test)
 - **Token overhead**: Claude Code adds about 900 tokens of context to every chat request. These are
   cached after the first call.
 - `temperature`, `top_p`, `stop` and similar sampling parameters are ignored.
-- `max_tokens` is passed as `CLAUDE_CODE_MAX_OUTPUT_TOKENS`.
+- `max_tokens` / `max_completion_tokens` are ignored; replies use Claude Code's default output limit.
 - Costs in `/usage` are Claude Code's client-side estimates, not a bill.
 - Not affiliated with or supported by Anthropic.

@@ -43,7 +43,6 @@ export function toChatRequest(body: MessagesBody, signal: AbortSignal): ChatRequ
     model: resolveModel(body.model),
     system: systemText(body.system),
     prompt: buildUserMessage(body.messages),
-    maxTokens: body.max_tokens,
     effort: body.output_config?.effort,
     thinking: thinkingConfig(body.thinking),
     signal,

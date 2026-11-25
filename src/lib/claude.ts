@@ -29,7 +29,6 @@ export interface ChatRequest {
   model?: string
   system?: string
   prompt: SDKUserMessage
-  maxTokens?: number
   effort?: EffortLevel
   thinking?: ThinkingConfig
   signal?: AbortSignal
@@ -107,8 +106,11 @@ export async function* runChat(req: ChatRequest): AsyncGenerator<ChatEvent> {
     abortController,
     effort: req.effort,
     thinking: req.thinking,
-    env: sdkEnv(req.maxTokens ? { CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(req.maxTokens) } : {}),
+    env: sdkEnv(),
   }
+
+  const effortLabel = req.effort ?? "default"
+  consola.info(`Chat: model=${req.model ?? "default"} effort=${effortLabel}`)
 
   let sawMessageStop = false
   let sawAnyEvent = false
@@ -117,6 +119,9 @@ export async function* runChat(req: ChatRequest): AsyncGenerator<ChatEvent> {
       if (msg.type === "stream_event") {
         // Forward only the first top-level reply; ignore anything after it.
         if (msg.parent_tool_use_id !== null || sawMessageStop) continue
+        if (!sawAnyEvent && msg.event.type === "message_start" && msg.event.message.model !== req.model) {
+          consola.info(`Chat: model resolved to ${msg.event.message.model} (effort=${effortLabel})`)
+        }
         sawAnyEvent = true
         if (msg.event.type === "message_stop") sawMessageStop = true
         yield { kind: "event", event: msg.event }

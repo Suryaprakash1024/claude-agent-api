@@ -130,7 +130,6 @@ chatCompletionsRoutes.post("/", async (c) => {
       model: resolveModel(body.model),
       system,
       prompt: buildUserMessage(messages),
-      maxTokens: body.max_completion_tokens ?? body.max_tokens,
       effort: toEffort(body.reasoning_effort),
       signal: c.req.raw.signal,
     }
