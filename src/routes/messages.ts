@@ -9,6 +9,7 @@ import { anthropicErrorBody, HttpError, toHttpError } from "../lib/errors.ts"
 import { checkRateLimit, manualApproval } from "../lib/guard.ts"
 import { resolveModel } from "../lib/models.ts"
 import { buildUserMessage, contentToText } from "../lib/prompt.ts"
+import type { ClientTool, ToolChoice } from "../lib/tools.ts"
 import { recordError, recordRequest } from "../lib/usage.ts"
 
 /** The parts of a Messages API request this server understands. */
@@ -18,7 +19,8 @@ interface MessagesBody {
   system?: string | Anthropic.TextBlockParam[]
   max_tokens?: number
   stream?: boolean
-  tools?: unknown[]
+  tools?: Array<{ name: string; type?: string; description?: string; input_schema?: Record<string, unknown> }>
+  tool_choice?: ToolChoice & { disable_parallel_tool_use?: boolean }
   thinking?: { type: "adaptive" | "enabled" | "disabled"; display?: "summarized" | "omitted" }
   output_config?: { effort?: EffortLevel }
 }
@@ -34,18 +36,29 @@ function thinkingConfig(t: MessagesBody["thinking"]): ThinkingConfig | undefined
   return { type: "adaptive", display: t.display }
 }
 
+/** Custom (client-run) tools pass through; server tools such as web search can't be offered. */
+function toClientTools(tools: MessagesBody["tools"]): ClientTool[] {
+  const out: ClientTool[] = []
+  for (const t of tools ?? []) {
+    if (!t.input_schema || (t.type && t.type !== "custom")) {
+      consola.warn(`Skipping tool "${t.name}"${t.type ? ` (${t.type})` : ""}: only custom tools with an input_schema are supported`)
+      continue
+    }
+    out.push({ name: t.name, description: t.description, input_schema: t.input_schema })
+  }
+  return out
+}
+
 export function toChatRequest(body: MessagesBody, signal: AbortSignal): ChatRequest {
   if (!Array.isArray(body.messages)) throw new HttpError(400, "messages is required", "invalid_request_error")
-  if (body.tools?.length) {
-    consola.warn("Request includes client-defined tools; they are ignored (Claude Code backend runs without client tools)")
-  }
   return {
     model: resolveModel(body.model),
     system: systemText(body.system),
     prompt: buildUserMessage(body.messages),
-    maxTokens: body.max_tokens,
     effort: body.output_config?.effort,
     thinking: thinkingConfig(body.thinking),
+    tools: toClientTools(body.tools),
+    toolChoice: body.tool_choice,
     signal,
   }
 }

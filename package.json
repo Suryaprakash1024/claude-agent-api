@@ -31,6 +31,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.331",
     "@anthropic-ai/sdk": "^1.13.0",
     "@hono/node-server": "^2.1.11",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "citty": "^0.2.2",
     "consola": "^3.4.2",
     "hono": "^4.13.21"

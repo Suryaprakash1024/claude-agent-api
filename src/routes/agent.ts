@@ -82,12 +82,15 @@ agentRoutes.post("/query", async (c) => {
     const allowedTools = body.allowed_tools ?? DEFAULT_TOOLS
     await checkRateLimit()
     await manualApproval(`POST /v1/agent/query cwd=${cwd} tools=${allowedTools.join(",")}`)
-    consola.info(`Agent run in ${cwd} (tools: ${allowedTools.join(", ")}; mode: ${mode})`)
+    const model = resolveModel(body.model)
+    consola.info(
+      `Agent run in ${cwd} (model: ${model ?? "default"}; effort: ${body.effort ?? "default"}; tools: ${allowedTools.join(", ")}; mode: ${mode})`,
+    )
 
     const events = runAgent({
       prompt: body.prompt,
       cwd,
-      model: resolveModel(body.model),
+      model,
       allowedTools,
       permissionMode: mode as Options["permissionMode"],
       maxTurns: Math.min(body.max_turns ?? 20, 100),

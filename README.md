@@ -97,7 +97,7 @@ Usage:      http://127.0.0.1:4141/usage
 | `POST /v1/chat/completions` (also `/chat/completions`) | OpenAI | Streaming, `stream_options.include_usage`, images (`image_url` data or https URLs), `reasoning_effort` → effort, reasoning returned as `reasoning_content` |
 | `GET /v1/models` (also `/models`) | OpenAI | Live list from Claude Code (aliases such as `sonnet` plus full IDs) |
 | `POST /v1/embeddings` | OpenAI | Returns **501**: Claude has no embeddings |
-| `POST /v1/messages` | Anthropic | Streaming passes Claude's own SSE events through unchanged. `system`, `max_tokens`, `thinking`, `output_config.effort` |
+| `POST /v1/messages` | Anthropic | Streaming passes Claude's own SSE events through unchanged. `system`, `thinking`, `output_config.effort` |
 | `POST /v1/messages/count_tokens` | Anthropic | Exact when `ANTHROPIC_API_KEY` is set; otherwise an estimate (~4 chars/token) with header `x-token-count-estimated: true` |
 | `POST /v1/agent/query` | (own) | Claude Code **with tools** in a folder; see below. Needs `--agent` |
 | `GET /usage` | (like copilot-api) | Requests, errors, tokens and estimated cost per model since start, plus the signed-in account |
@@ -165,7 +165,7 @@ client ──HTTP──▶ Hono server ──translate──▶ query() (Agent S
 ```
 
 - **Chat mode** (`/v1/chat/completions`, `/v1/messages`) runs Claude Code as a plain model:
-  - no tools (`tools: []`)
+  - none of Claude Code's own tools (`tools: []`)
   - no settings files or CLAUDE.md (`settingSources: []`)
   - no saved session (`persistSession: false`)
   - one turn
@@ -175,6 +175,13 @@ client ──HTTP──▶ Hono server ──translate──▶ query() (Agent S
   request are sent as a `<conversation_history>` transcript ahead of the latest user message.
 - **Streaming**: `includePartialMessages` gives the raw Messages API stream events. `/v1/messages`
   passes them through unchanged; `/v1/chat/completions` turns them into OpenAI chunks.
+- **Function calling**: client tools (OpenAI `tools` of type `function`, Anthropic custom tools) are
+  offered to the model through an in-process MCP server, with their JSON Schemas unchanged. When the
+  model calls one, the call is denied rather than run, and the reply ends with `tool_calls`
+  (`finish_reason: "tool_calls"`) / a `tool_use` block (`stop_reason: "tool_use"`). Your client runs
+  the tool and sends the result in its next request, as with the OpenAI or Anthropic APIs.
+  `tool_choice` `none` hides the tools; `required` / a named tool becomes a system-prompt instruction,
+  since Claude Code can't force a tool call.
 - **Usage**: every `result` message's `modelUsage` is added to the `/usage` counters.
 
 Project layout:
@@ -189,6 +196,7 @@ src/
   routes/agent.ts         /v1/agent/query (Claude Code with tools)
   lib/claude.ts           Agent SDK calls: runChat, runAgent, probe, MessageAccumulator
   lib/prompt.ts           messages → Claude Code user turn
+  lib/tools.ts            client tools → in-process MCP server
   lib/guard.ts            rate limit, manual approval, concurrency
   lib/models.ts, usage.ts, errors.ts, state.ts
 tests/translate.test.ts   unit tests for request translation (npm test)
@@ -196,13 +204,15 @@ tests/translate.test.ts   unit tests for request translation (npm test)
 
 ## Limitations
 
-- **Client-defined tools / function calling are not supported** in chat mode. `tools` in a request is
-  ignored with a warning. Use agent mode for Claude Code's own tools.
+- **Function calling** works for client-run tools only. Server tools (Anthropic web search, OpenAI
+  built-in tools) are skipped with a warning. `tool_choice: "required"` or a named tool is asked for in
+  the system prompt, not enforced, and `parallel_tool_calls` is ignored. Earlier tool calls and results
+  reach the model as text in the conversation transcript.
 - **Assistant prefill is not supported.** The last message must be from the user.
 - **Latency**: each request starts a Claude Code process, which adds about 1–3 s before the first token.
 - **Token overhead**: Claude Code adds about 900 tokens of context to every chat request. These are
   cached after the first call.
 - `temperature`, `top_p`, `stop` and similar sampling parameters are ignored.
-- `max_tokens` is passed as `CLAUDE_CODE_MAX_OUTPUT_TOKENS`.
+- `max_tokens` / `max_completion_tokens` are ignored; replies use Claude Code's default output limit.
 - Costs in `/usage` are Claude Code's client-side estimates, not a bill.
 - Not affiliated with or supported by Anthropic.

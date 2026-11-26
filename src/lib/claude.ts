@@ -20,6 +20,7 @@ import { HttpError, statusForSdkError } from "./errors.ts"
 import { slots } from "./guard.ts"
 import { contentToText, singleTurn } from "./prompt.ts"
 import { APP_NAME, APP_VERSION, state } from "./state.ts"
+import { clientToolName, clientToolServer, toolChoiceInstruction, type ClientTool, type ToolChoice } from "./tools.ts"
 import { recordResult } from "./usage.ts"
 
 export type StreamEvent = Anthropic.Beta.BetaRawMessageStreamEvent
@@ -29,9 +30,11 @@ export interface ChatRequest {
   model?: string
   system?: string
   prompt: SDKUserMessage
-  maxTokens?: number
   effort?: EffortLevel
   thinking?: ThinkingConfig
+  /** Client-defined tools. The model may call them; the client runs them. */
+  tools?: ClientTool[]
+  toolChoice?: ToolChoice
   signal?: AbortSignal
 }
 
@@ -87,17 +90,25 @@ function resultError(result: SDKResultMessage): HttpError | undefined {
 }
 
 /**
- * Plain-model mode: Claude Code with no tools, no settings files, no saved session,
- * and the caller's system prompt in place of Claude Code's. Yields the Messages API
- * stream events of the reply, then the result.
+ * Plain-model mode: Claude Code with none of its own tools, no settings files, no
+ * saved session, and the caller's system prompt in place of Claude Code's. Yields
+ * the Messages API stream events of the reply, then the result.
+ *
+ * Client tools are offered through an in-process MCP server. A call is denied rather
+ * than run, so the reply ends with the tool_use block (stop_reason "tool_use") for the
+ * client to run, as with the Messages API.
  */
 export async function* runChat(req: ChatRequest): AsyncGenerator<ChatEvent> {
   const release = await slots.acquire()
   const abortController = linkAbort(req.signal)
+  const tools = req.toolChoice?.type === "none" ? [] : (req.tools ?? [])
+  const systemPrompt = [req.system ?? "You are a helpful assistant.", tools.length ? toolChoiceInstruction(req.toolChoice) : undefined]
+    .filter(Boolean)
+    .join("\n\n")
   const options: Options = {
     ...commonOptions(),
     model: req.model,
-    systemPrompt: req.system ?? "You are a helpful assistant.",
+    systemPrompt,
     cwd: chatCwd(),
     tools: [],
     settingSources: [],
@@ -107,28 +118,52 @@ export async function* runChat(req: ChatRequest): AsyncGenerator<ChatEvent> {
     abortController,
     effort: req.effort,
     thinking: req.thinking,
-    env: sdkEnv(req.maxTokens ? { CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(req.maxTokens) } : {}),
+    // Keep client tools loaded up front: tool search would hide them behind a tool chat mode doesn't have.
+    env: sdkEnv(tools.length ? { ENABLE_TOOL_SEARCH: "false" } : {}),
+    ...(tools.length
+      ? {
+          mcpServers: { client: clientToolServer(tools) },
+          canUseTool: async () => ({ behavior: "deny" as const, message: "This tool is run by the API client." }),
+        }
+      : {}),
   }
+
+  const effortLabel = req.effort ?? "default"
+  consola.info(`Chat: model=${req.model ?? "default"} effort=${effortLabel}${tools.length ? ` tools=${tools.length}` : ""}`)
 
   let sawMessageStop = false
   let sawAnyEvent = false
+  let sawResult = false
   try {
     for await (const msg of query({ prompt: singleTurn(req.prompt), options })) {
       if (msg.type === "stream_event") {
         // Forward only the first top-level reply; ignore anything after it.
         if (msg.parent_tool_use_id !== null || sawMessageStop) continue
+        if (!sawAnyEvent && msg.event.type === "message_start" && msg.event.message.model !== req.model) {
+          consola.info(`Chat: model resolved to ${msg.event.message.model} (effort=${effortLabel})`)
+        }
         sawAnyEvent = true
         if (msg.event.type === "message_stop") sawMessageStop = true
-        yield { kind: "event", event: msg.event }
+        const e = msg.event
+        if (e.type === "content_block_start" && e.content_block.type === "tool_use") {
+          yield { kind: "event", event: { ...e, content_block: { ...e.content_block, name: clientToolName(e.content_block.name) } } }
+        } else {
+          yield { kind: "event", event: e }
+        }
       } else if (msg.type === "assistant" && msg.error && !sawAnyEvent) {
         throw new HttpError(statusForSdkError(msg.error), assistantErrorText(msg), msg.error)
       } else if (msg.type === "result") {
         recordResult(msg)
+        sawResult = true
         const err = resultError(msg)
         if (err && !sawAnyEvent) throw err
         yield { kind: "result", result: msg }
       }
     }
+  } catch (err) {
+    // After a denied client tool call the run ends on max turns, and the SDK throws
+    // once the result is out. The reply is complete by then, so that isn't an error.
+    if (!(sawResult && sawMessageStop)) throw err
   } finally {
     abortController.abort()
     release()
